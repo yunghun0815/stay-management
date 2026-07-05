@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx --yes shadcn@latest init -y -b neutral)",
+      "Bash(npx --yes shadcn@latest init -y -c . --base-color neutral)",
+      "Bash(npx --yes shadcn@latest init --help)",
+      "Bash(npx --yes shadcn@latest init -d -y)",
+      "Bash(npx --yes shadcn@latest add card table calendar dialog tabs badge select sidebar chart button input label form dropdown-menu popover separator sonner sheet avatar skeleton -y)",
+      "Bash(npx --yes shadcn@latest add form -y)",
+      "Bash(npx --yes shadcn@latest add form -y --overwrite)",
+      "Bash(npx --yes shadcn@latest view form)",
+      "Bash(npm install *)",
+      "Bash(mkdir -p \"/c/Users/yungh/OneDrive/바탕 화면/dev/임대관리/src/app/\\(app\\)/dashboard\" \\\\ *)",
+      "Bash(npx tsc *)",
+      "Bash(cp .env.local.example .env.local)",
+      "Bash(NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder npx next build)",
+      "Bash(rm -rf .next)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(npx supabase *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"https://ebebdeyqwmbqqmtzzuzf.supabase.co/auth/v1/health\")",
+      "Bash(curl -s \"https://ebebdeyqwmbqqmtzzuzf.supabase.co/auth/v1/health\" -H \"apikey: sb_publishable_6Tkbd22iEZ2fsYFBdNCUAg_P-lLxCSM\")",
+      "Bash(curl -s 'https://ebebdeyqwmbqqmtzzuzf.supabase.co/rest/v1/properties?select=id&limit=1' -H 'apikey: sb_publishable_6Tkbd22iEZ2fsYFBdNCUAg_P-lLxCSM' -H 'Authorization: Bearer sb_publishable_6Tkbd22iEZ2fsYFBdNCUAg_P-lLxCSM')",
+      "Bash(perl -0pi -e 's/formatter=\\\\{\\\\\\(value: number\\\\\\) => `\\\\$\\\\{value\\\\.toLocaleString\\\\\\(\\\\\\)\\\\}원`\\\\}/formatter={\\(value\\) => `${Number\\(value\\).toLocaleString\\(\\)}원`}/g' src/components/ledger/report-charts.tsx)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\yungh\\OneDrive\\바탕 화면\\dev\\임대관리\\src\\app\\(app)\\properties"
+    ]
+  }
+}
