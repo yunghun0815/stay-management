@@ -29,7 +29,7 @@ const PALETTE = [
 export function CategoryPieChart({
   data,
 }: {
-  data: { name: string; value: number }[];
+  data: { name: string; value: number; color?: string }[];
 }) {
   if (data.length === 0) {
     return (
@@ -42,9 +42,17 @@ export function CategoryPieChart({
   return (
     <ResponsiveContainer width="100%" height={256}>
       <PieChart>
-        <Pie data={data} dataKey="value" nameKey="name" innerRadius={50} outerRadius={90}>
-          {data.map((_, i) => (
-            <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
+        <Pie
+          data={data}
+          dataKey="value"
+          nameKey="name"
+          innerRadius={50}
+          outerRadius={90}
+          stroke="#fff"
+          strokeWidth={2}
+        >
+          {data.map((d, i) => (
+            <Cell key={i} fill={d.color || PALETTE[i % PALETTE.length]} />
           ))}
         </Pie>
         <Tooltip formatter={(value) => `${Number(value).toLocaleString()}원`} />

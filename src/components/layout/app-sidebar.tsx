@@ -2,10 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, CalendarDays, LayoutDashboard, ListChecks, Wallet } from "lucide-react";
+import {
+  Building2,
+  CalendarDays,
+  ChevronsUpDown,
+  LayoutDashboard,
+  ListChecks,
+  LogOut,
+  User,
+  Wallet,
+} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -14,6 +24,14 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { signOut } from "@/lib/actions/auth";
 
 const navItems = [
   { title: "대시보드", url: "/dashboard", icon: LayoutDashboard },
@@ -23,7 +41,7 @@ const navItems = [
   { title: "가계부", url: "/ledger", icon: Wallet },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ userEmail }: { userEmail?: string | null }) {
   const pathname = usePathname();
 
   return (
@@ -31,10 +49,10 @@ export function AppSidebar() {
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1.5">
           <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-sm font-semibold">
-            숙
+            S
           </div>
           <span className="text-sm font-semibold group-data-[collapsible=icon]:hidden">
-            숙소관리
+            Stay Management
           </span>
         </div>
       </SidebarHeader>
@@ -63,6 +81,37 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<SidebarMenuButton size="lg" />}>
+                <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                  {userEmail?.[0]?.toUpperCase() ?? <User className="size-3.5" />}
+                </div>
+                <span className="truncate text-sm">{userEmail ?? "계정"}</span>
+                <ChevronsUpDown className="ml-auto size-4 text-muted-foreground" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" className="w-56">
+                <DropdownMenuItem render={<Link href="/account" />}>
+                  <User />
+                  마이페이지
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => {
+                    signOut();
+                  }}
+                >
+                  <LogOut />
+                  로그아웃
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }

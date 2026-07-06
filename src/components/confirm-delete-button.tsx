@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { useConfirm, useAlertDialog } from "@/components/providers/dialog-provider";
 import { Trash2 } from "lucide-react";
 
 export function ConfirmDeleteButton({
@@ -12,6 +13,8 @@ export function ConfirmDeleteButton({
   confirmMessage?: string;
 }) {
   const [pending, startTransition] = useTransition();
+  const confirm = useConfirm();
+  const alertDialog = useAlertDialog();
 
   return (
     <Button
@@ -19,11 +22,12 @@ export function ConfirmDeleteButton({
       variant="ghost"
       size="icon"
       disabled={pending}
-      onClick={() => {
-        if (!window.confirm(confirmMessage)) return;
+      onClick={async () => {
+        const ok = await confirm({ title: "삭제 확인", description: confirmMessage, destructive: true });
+        if (!ok) return;
         startTransition(async () => {
           const result = await action();
-          if (result?.error) window.alert(result.error);
+          if (result?.error) await alertDialog({ description: result.error });
         });
       }}
     >

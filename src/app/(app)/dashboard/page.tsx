@@ -58,7 +58,7 @@ export default async function DashboardPage({
 
   let transactionsQuery = supabase
     .from("transactions")
-    .select("amount, type, date, categories(name), properties(name)")
+    .select("amount, type, date, categories(name), properties(name), bookings(channels(name, color))")
     .gte("date", trendRangeStart)
     .lte("date", monthEndStr);
   if (propertyId) transactionsQuery = transactionsQuery.eq("property_id", propertyId);
@@ -72,7 +72,7 @@ export default async function DashboardPage({
 
   let monthBookingsQuery = supabase
     .from("bookings")
-    .select("check_in, check_out, total_amount, channels(name)")
+    .select("check_in, check_out")
     .lte("check_in", monthEndStr)
     .gte("check_out", monthStartStr);
   if (propertyId) monthBookingsQuery = monthBookingsQuery.eq("property_id", propertyId);
@@ -105,19 +105,13 @@ export default async function DashboardPage({
         date: string;
         categories: { name: string } | null;
         properties: { name: string } | null;
+        bookings: { channels: { name: string; color: string | null } | null } | null;
       }>
     >(),
     yearlyTransactionsQuery.returns<
       Array<{ amount: number; type: "income" | "expense"; date: string }>
     >(),
-    monthBookingsQuery.returns<
-      Array<{
-        check_in: string;
-        check_out: string;
-        total_amount: number | null;
-        channels: { name: string } | null;
-      }>
-    >(),
+    monthBookingsQuery.returns<Array<{ check_in: string; check_out: string }>>(),
     propertyId
       ? Promise.resolve({ count: 1 })
       : supabase.from("properties").select("id", { count: "exact", head: true }).eq("status", "active"),
@@ -180,9 +174,12 @@ export default async function DashboardPage({
   }
 
   const channelRevenue = new Map<string, number>();
-  for (const b of monthBookings ?? []) {
-    const label = b.channels?.name ?? "미분류";
-    channelRevenue.set(label, (channelRevenue.get(label) ?? 0) + Number(b.total_amount ?? 0));
+  const channelColors = new Map<string, string | null>();
+  for (const t of monthTransactions) {
+    if (t.type !== "income") continue;
+    const label = t.bookings?.channels?.name ?? "미분류";
+    channelRevenue.set(label, (channelRevenue.get(label) ?? 0) + Number(t.amount));
+    if (!channelColors.has(label)) channelColors.set(label, t.bookings?.channels?.color ?? null);
   }
 
   const trendMap = new Map<string, { income: number; expense: number }>();
@@ -212,7 +209,11 @@ export default async function DashboardPage({
   }
 
   const expenseData = Array.from(expenseByCategory, ([name, value]) => ({ name, value }));
-  const channelData = Array.from(channelRevenue, ([name, value]) => ({ name, value }));
+  const channelData = Array.from(channelRevenue, ([name, value]) => ({
+    name,
+    value,
+    color: channelColors.get(name) ?? undefined,
+  }));
   const trendData = Array.from(trendMap, ([month, v]) => ({ month, ...v }));
   const yearlyData = Array.from(yearlyMap, ([year, v]) => ({ year, ...v }));
 

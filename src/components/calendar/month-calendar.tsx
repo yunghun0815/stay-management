@@ -17,7 +17,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BookingFormDialog } from "@/components/bookings/booking-form-dialog";
 import { EventFormDialog } from "@/components/calendar/event-form-dialog";
 import { toggleCalendarEventCompletion } from "@/lib/actions/calendar-events";
-import type { Booking, CalendarEvent, Channel, EventCategory, Property } from "@/types/supabase";
+import type { Booking, CalendarEvent, Channel, EventCategory, PaymentType, Property } from "@/types/supabase";
 
 type BookingWithRelations = Booking & {
   properties: { name: string } | null;
@@ -66,6 +66,7 @@ export function MonthCalendar({
   eventCategories,
   properties,
   channels,
+  paymentTypes,
   prevMonthHref,
   nextMonthHref,
   todayHref,
@@ -76,6 +77,7 @@ export function MonthCalendar({
   eventCategories: EventCategory[];
   properties: Property[];
   channels: Channel[];
+  paymentTypes: PaymentType[];
   prevMonthHref: string;
   nextMonthHref: string;
   todayHref: string;
@@ -100,24 +102,46 @@ export function MonthCalendar({
   const dragHoverRef = useRef<string | null>(null);
 
   useEffect(() => {
-    function handlePointerUp() {
-      if (!isPointerDownRef.current || !dragAnchorRef.current) return;
+    function reset() {
       isPointerDownRef.current = false;
-      const anchor = dragAnchorRef.current;
-      const end = dragHoverRef.current ?? anchor;
-      const start = anchor < end ? anchor : end;
-      const finalEnd = anchor < end ? end : anchor;
-      setCreateRange({ start, end: finalEnd });
       dragAnchorRef.current = null;
       dragHoverRef.current = null;
       setDragAnchor(null);
       setDragHover(null);
     }
+    function handlePointerUp() {
+      if (!isPointerDownRef.current || !dragAnchorRef.current) return;
+      const anchor = dragAnchorRef.current;
+      const end = dragHoverRef.current ?? anchor;
+      const start = anchor < end ? anchor : end;
+      const finalEnd = anchor < end ? end : anchor;
+      reset();
+      setCreateRange({ start, end: finalEnd });
+    }
+    // 모바일 등에서 다이얼로그가 열리며 제스처가 중단되면 pointerup 대신
+    // pointercancel이 발생해 상태가 남아있을 수 있으므로 함께 초기화한다.
+    function handlePointerCancel() {
+      reset();
+    }
     window.addEventListener("pointerup", handlePointerUp);
-    return () => window.removeEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerCancel);
+    return () => {
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerCancel);
+    };
   }, []);
 
-  function handleDayPointerDown(dayStr: string) {
+  function handleDayPointerDown(e: React.PointerEvent<HTMLDivElement>, dayStr: string) {
+    // 예약/일정 버튼 클릭이 실수로 새 일정 등록 드래그로 이어지지 않도록 방어.
+    if (e.target instanceof Element && e.target.closest("button")) return;
+    // 예약/일정 수정 다이얼로그는 Portal로 렌더링되어 실제 DOM상으로는 날짜 셀
+    // 밖에 있지만, React의 합성 이벤트는 DOM이 아닌 컴포넌트 트리를 따라
+    // 버블링되기 때문에 다이얼로그 내부(입력창, 메모 등 버튼이 아닌 요소)를
+    // 클릭해도 이 핸들러까지 전파된다. 다이얼로그가 열려 있는 동안에는 실제
+    // DOM 상태를 직접 확인해 드래그 생성 자체를 시작하지 않도록 막는다.
+    if (typeof document !== "undefined" && document.querySelector('[data-slot="dialog-content"]')) {
+      return;
+    }
     isPointerDownRef.current = true;
     dragAnchorRef.current = dayStr;
     dragHoverRef.current = dayStr;
@@ -209,7 +233,7 @@ export function MonthCalendar({
                   <div
                     key={dayStr}
                     data-date={dayStr}
-                    onPointerDown={() => handleDayPointerDown(dayStr)}
+                    onPointerDown={(e) => handleDayPointerDown(e, dayStr)}
                     onPointerEnter={() => handleDayPointerEnter(dayStr)}
                     className={`group flex min-h-[132px] cursor-pointer flex-col gap-0.5 pt-1 pb-1 ${
                       inMonth ? "bg-card" : "bg-muted/20"
@@ -248,10 +272,11 @@ export function MonthCalendar({
 
                         return (
                           <BookingFormDialog
-                            key={lane}
+                            key={booking.id}
                             booking={booking}
                             properties={properties}
                             channels={channels}
+                            paymentTypes={paymentTypes}
                             trigger={
                               <button
                                 type="button"
@@ -260,9 +285,11 @@ export function MonthCalendar({
                                   isStart ? "rounded-l-sm" : ""
                                 } ${isEnd ? "rounded-r-sm" : ""}`}
                                 style={{ backgroundColor: color }}
-                                title={`${booking.guest_name} · ${booking.properties?.name ?? ""}`}
+                                title={`${booking.properties?.name ?? ""} - ${booking.guest_name}`}
                               >
-                                {isStart ? `${booking.guest_name}` : ""}
+                                {isStart
+                                  ? `${booking.properties?.name ? `${booking.properties.name} - ` : ""}${booking.guest_name}`
+                                  : ""}
                               </button>
                             }
                           />
@@ -287,7 +314,7 @@ export function MonthCalendar({
 
                         return (
                           <div
-                            key={lane}
+                            key={event.id}
                             onPointerDown={(e) => e.stopPropagation()}
                             className={`flex h-[20px] items-center gap-1 text-[11px] ${
                               isStart ? "rounded-l-sm" : ""

@@ -17,13 +17,12 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
-  SelectItem,
   SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { ManagedSelectItem } from "@/components/managed-select-item";
-import { Plus } from "lucide-react";
+import { SelectAddNewRow } from "@/components/select-add-new-row";
 import {
   createCalendarEvent,
   updateCalendarEvent,
@@ -34,9 +33,8 @@ import {
   updateEventCategory,
   deleteEventCategory,
 } from "@/lib/actions/event-categories";
+import { useConfirm, useAlertDialog } from "@/components/providers/dialog-provider";
 import type { CalendarEvent, EventCategory } from "@/types/supabase";
-
-const ADD_NEW_VALUE = "__add_new__";
 
 export function EventFormDialog({
   event,
@@ -67,6 +65,8 @@ export function EventFormDialog({
   const [categoryId, setCategoryId] = useState(event?.category_id ?? "");
   const [, startCategoryTransition] = useTransition();
   const [deletePending, startDeleteTransition] = useTransition();
+  const confirm = useConfirm();
+  const alertDialog = useAlertDialog();
 
   useEffect(() => {
     if (submittedOnce && !pending && state === null) {
@@ -81,45 +81,32 @@ export function EventFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories.length]);
 
-  function handleCategoryChange(value: string | null) {
-    if (value !== ADD_NEW_VALUE) {
-      setCategoryId(value ?? "");
-      return;
-    }
-    const name = window.prompt("새 카테고리 이름을 입력해주세요");
-    if (!name?.trim()) return;
-    startCategoryTransition(async () => {
-      const result = await quickCreateEventCategory(name);
-      if ("error" in result) {
-        window.alert(result.error);
-        return;
-      }
-      setCategoryList((prev) => [...prev, { ...result, owner_id: "", created_at: "" }]);
-      setCategoryId(result.id);
-    });
+  async function handleCategoryAdd(name: string, color: string) {
+    const result = await quickCreateEventCategory(name, color);
+    if ("error" in result) return result;
+    setCategoryList((prev) => [...prev, { ...result, owner_id: "", created_at: "" }]);
+    setCategoryId(result.id);
   }
 
-  function handleCategoryEdit(category: EventCategory) {
-    const name = window.prompt("카테고리 이름 수정", category.name);
-    if (!name?.trim() || name === category.name) return;
-    startCategoryTransition(async () => {
-      const result = await updateEventCategory(category.id, name);
-      if ("error" in result) {
-        window.alert(result.error);
-        return;
-      }
-      setCategoryList((prev) =>
-        prev.map((c) => (c.id === category.id ? { ...c, name: result.name } : c))
-      );
-    });
+  async function handleCategorySave(category: EventCategory, name: string, color: string) {
+    const result = await updateEventCategory(category.id, name, color);
+    if ("error" in result) return result;
+    setCategoryList((prev) =>
+      prev.map((c) => (c.id === category.id ? { ...c, name: result.name, color: result.color } : c))
+    );
   }
 
-  function handleCategoryDelete(category: EventCategory) {
-    if (!window.confirm(`"${category.name}" 카테고리를 삭제할까요?`)) return;
+  async function handleCategoryDelete(category: EventCategory) {
+    const ok = await confirm({
+      title: "카테고리 삭제",
+      description: `"${category.name}" 카테고리를 삭제할까요?`,
+      destructive: true,
+    });
+    if (!ok) return;
     startCategoryTransition(async () => {
       const result = await deleteEventCategory(category.id);
       if (result.error) {
-        window.alert(result.error);
+        await alertDialog({ description: result.error });
         return;
       }
       setCategoryList((prev) => prev.filter((c) => c.id !== category.id));
@@ -154,6 +141,7 @@ export function EventFormDialog({
                   id="date"
                   name="date"
                   type="date"
+                  max="9999-12-31"
                   defaultValue={event?.date ?? defaultStart}
                   required
                 />
@@ -164,6 +152,7 @@ export function EventFormDialog({
                   id="end_date"
                   name="end_date"
                   type="date"
+                  max="9999-12-31"
                   defaultValue={event?.end_date ?? defaultEnd ?? defaultStart}
                   required
                 />
@@ -171,7 +160,11 @@ export function EventFormDialog({
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="category_id">카테고리</Label>
-              <Select name="category_id" value={categoryId} onValueChange={handleCategoryChange}>
+              <Select
+                name="category_id"
+                value={categoryId}
+                onValueChange={(value) => setCategoryId(value ?? "")}
+              >
                 <SelectTrigger id="category_id" className="w-full">
                   <SelectValue placeholder="카테고리 선택">
                     {(value: string | null) =>
@@ -188,14 +181,12 @@ export function EventFormDialog({
                       value={c.id}
                       label={c.name}
                       color={c.color}
-                      onEdit={() => handleCategoryEdit(c)}
+                      onSave={(name, color) => handleCategorySave(c, name, color)}
                       onDelete={() => handleCategoryDelete(c)}
                     />
                   ))}
                   <SelectSeparator />
-                  <SelectItem value={ADD_NEW_VALUE}>
-                    <Plus className="size-3.5" />새 카테고리 추가
-                  </SelectItem>
+                  <SelectAddNewRow placeholder="새 카테고리 이름" onAdd={handleCategoryAdd} />
                 </SelectContent>
               </Select>
             </div>
@@ -212,8 +203,13 @@ export function EventFormDialog({
                 type="button"
                 variant="destructive"
                 disabled={deletePending}
-                onClick={() => {
-                  if (!window.confirm(`"${event.title}" 일정을 삭제할까요?`)) return;
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: "일정 삭제",
+                    description: `"${event.title}" 일정을 삭제할까요?`,
+                    destructive: true,
+                  });
+                  if (!ok) return;
                   setOpen(false);
                   startDeleteTransition(async () => {
                     await deleteCalendarEvent(event.id);

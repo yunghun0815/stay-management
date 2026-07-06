@@ -11,19 +11,19 @@ const DEFAULT_EVENT_CATEGORIES: { name: string; color: string }[] = [
 
 export async function ensureDefaultEventCategories() {
   const { supabase, user } = await requireUser();
-  const { count } = await supabase
-    .from("event_categories")
-    .select("id", { count: "exact", head: true });
-
-  if (count && count > 0) return;
-
+  // owner_id+name에 유니크 제약이 있어 동시에 여러 요청이 호출되어도
+  // 중복 삽입되지 않는다(이미 있으면 무시).
   await supabase
     .from("event_categories")
-    .insert(DEFAULT_EVENT_CATEGORIES.map((c) => ({ ...c, owner_id: user.id })));
+    .upsert(
+      DEFAULT_EVENT_CATEGORIES.map((c) => ({ ...c, owner_id: user.id })),
+      { onConflict: "owner_id,name", ignoreDuplicates: true }
+    );
 }
 
 export async function quickCreateEventCategory(
-  name: string
+  name: string,
+  color?: string
 ): Promise<{ id: string; name: string; color: string | null } | { error: string }> {
   const trimmed = name.trim();
   if (!trimmed) return { error: "카테고리 이름을 입력해주세요." };
@@ -31,7 +31,7 @@ export async function quickCreateEventCategory(
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase
     .from("event_categories")
-    .insert({ name: trimmed, owner_id: user.id })
+    .insert({ name: trimmed, color: color ?? null, owner_id: user.id })
     .select("id, name, color")
     .single();
 
@@ -43,7 +43,8 @@ export async function quickCreateEventCategory(
 
 export async function updateEventCategory(
   id: string,
-  name: string
+  name: string,
+  color?: string
 ): Promise<{ id: string; name: string; color: string | null } | { error: string }> {
   const trimmed = name.trim();
   if (!trimmed) return { error: "카테고리 이름을 입력해주세요." };
@@ -51,7 +52,7 @@ export async function updateEventCategory(
   const { supabase } = await requireUser();
   const { data, error } = await supabase
     .from("event_categories")
-    .update({ name: trimmed })
+    .update({ name: trimmed, ...(color ? { color } : {}) })
     .eq("id", id)
     .select("id, name, color")
     .single();
@@ -60,19 +61,6 @@ export async function updateEventCategory(
 
   revalidatePath("/calendar");
   return data;
-}
-
-export async function updateEventCategoryColor(id: string, color: string) {
-  const { supabase } = await requireUser();
-  const { error } = await supabase
-    .from("event_categories")
-    .update({ color })
-    .eq("id", id);
-
-  if (error) return { error: error.message };
-
-  revalidatePath("/calendar");
-  return {};
 }
 
 export async function deleteEventCategory(id: string): Promise<{ error?: string }> {

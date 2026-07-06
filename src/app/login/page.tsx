@@ -20,25 +20,29 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    setLoading(false);
+      if (error) {
+        setError(error.message);
+        return;
+      }
 
-    if (error) {
-      setError(error.message);
-      return;
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("로그인 요청에 실패했습니다. 네트워크 연결을 확인해주세요.");
+    } finally {
+      setLoading(false);
     }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (
     <div className="flex flex-1 items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>숙소관리 로그인</CardTitle>
+          <CardTitle>Stay Management 로그인</CardTitle>
           <CardDescription>등록된 계정으로 로그인하세요.</CardDescription>
         </CardHeader>
         <CardContent>

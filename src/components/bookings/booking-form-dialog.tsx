@@ -23,17 +23,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ManagedSelectItem } from "@/components/managed-select-item";
-import { Plus } from "lucide-react";
+import { SelectAddNewRow } from "@/components/select-add-new-row";
+import { PaymentLinesEditor } from "@/components/bookings/payment-lines-editor";
 import { createBooking, updateBooking, deleteBooking } from "@/lib/actions/bookings";
 import { quickCreateChannel, updateChannel, deleteChannel } from "@/lib/actions/channels";
-import type { Booking, Channel, Property } from "@/types/supabase";
-
-const ADD_NEW_VALUE = "__add_new__";
+import { useConfirm, useAlertDialog } from "@/components/providers/dialog-provider";
+import type { Booking, Channel, PaymentType, Property } from "@/types/supabase";
 
 export function BookingFormDialog({
   booking,
   properties,
   channels,
+  paymentTypes,
   trigger,
   open: openProp,
   onOpenChange,
@@ -41,6 +42,7 @@ export function BookingFormDialog({
   booking?: Booking;
   properties: Property[];
   channels: Channel[];
+  paymentTypes: PaymentType[];
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -56,6 +58,8 @@ export function BookingFormDialog({
   const [channelId, setChannelId] = useState(booking?.channel_id ?? "");
   const [, startChannelTransition] = useTransition();
   const [deletePending, startDeleteTransition] = useTransition();
+  const confirm = useConfirm();
+  const alertDialog = useAlertDialog();
 
   useEffect(() => {
     if (submittedOnce && !pending && state === null) {
@@ -69,43 +73,32 @@ export function BookingFormDialog({
   const channelLabels: Record<string, string> = {};
   for (const c of channelList) channelLabels[c.id] = c.name;
 
-  function handleChannelChange(value: string | null) {
-    if (value !== ADD_NEW_VALUE) {
-      setChannelId(value ?? "");
-      return;
-    }
-    const name = window.prompt("새 채널 이름을 입력해주세요");
-    if (!name?.trim()) return;
-    startChannelTransition(async () => {
-      const result = await quickCreateChannel(name);
-      if ("error" in result) {
-        window.alert(result.error);
-        return;
-      }
-      setChannelList((prev) => [...prev, { ...result, owner_id: "", color: null, created_at: "" }]);
-      setChannelId(result.id);
-    });
+  async function handleChannelAdd(name: string, color: string) {
+    const result = await quickCreateChannel(name, color);
+    if ("error" in result) return result;
+    setChannelList((prev) => [...prev, { ...result, owner_id: "", created_at: "" }]);
+    setChannelId(result.id);
   }
 
-  function handleChannelEdit(channel: Channel) {
-    const name = window.prompt("채널 이름 수정", channel.name);
-    if (!name?.trim() || name === channel.name) return;
-    startChannelTransition(async () => {
-      const result = await updateChannel(channel.id, name);
-      if ("error" in result) {
-        window.alert(result.error);
-        return;
-      }
-      setChannelList((prev) => prev.map((c) => (c.id === channel.id ? { ...c, name: result.name } : c)));
-    });
+  async function handleChannelSave(channel: Channel, name: string, color: string) {
+    const result = await updateChannel(channel.id, name, color);
+    if ("error" in result) return result;
+    setChannelList((prev) =>
+      prev.map((c) => (c.id === channel.id ? { ...c, name: result.name, color: result.color } : c))
+    );
   }
 
-  function handleChannelDelete(channel: Channel) {
-    if (!window.confirm(`"${channel.name}" 채널을 삭제할까요?`)) return;
+  async function handleChannelDelete(channel: Channel) {
+    const ok = await confirm({
+      title: "채널 삭제",
+      description: `"${channel.name}" 채널을 삭제할까요?`,
+      destructive: true,
+    });
+    if (!ok) return;
     startChannelTransition(async () => {
       const result = await deleteChannel(channel.id);
       if (result.error) {
-        window.alert(result.error);
+        await alertDialog({ description: result.error });
         return;
       }
       setChannelList((prev) => prev.filter((c) => c.id !== channel.id));
@@ -161,11 +154,25 @@ export function BookingFormDialog({
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="check_in">체크인</Label>
-                <Input id="check_in" name="check_in" type="date" defaultValue={booking?.check_in} required />
+                <Input
+                  id="check_in"
+                  name="check_in"
+                  type="date"
+                  max="9999-12-31"
+                  defaultValue={booking?.check_in}
+                  required
+                />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="check_out">체크아웃</Label>
-                <Input id="check_out" name="check_out" type="date" defaultValue={booking?.check_out} required />
+                <Input
+                  id="check_out"
+                  name="check_out"
+                  type="date"
+                  max="9999-12-31"
+                  defaultValue={booking?.check_out}
+                  required
+                />
               </div>
             </div>
 
@@ -182,7 +189,11 @@ export function BookingFormDialog({
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="channel_id">예약채널</Label>
-                <Select name="channel_id" value={channelId} onValueChange={handleChannelChange}>
+                <Select
+                  name="channel_id"
+                  value={channelId}
+                  onValueChange={(value) => setChannelId(value ?? "")}
+                >
                   <SelectTrigger id="channel_id" className="w-full">
                     <SelectValue placeholder="채널 선택">
                       {(value: string | null) => (value ? channelLabels[value] : "채널 선택")}
@@ -195,41 +206,23 @@ export function BookingFormDialog({
                         value={channel.id}
                         label={channel.name}
                         color={channel.color}
-                        onEdit={() => handleChannelEdit(channel)}
+                        onSave={(name, color) => handleChannelSave(channel, name, color)}
                         onDelete={() => handleChannelDelete(channel)}
                       />
                     ))}
                     <SelectSeparator />
-                    <SelectItem value={ADD_NEW_VALUE}>
-                      <Plus className="size-3.5" />새 채널 추가
-                    </SelectItem>
+                    <SelectAddNewRow placeholder="새 채널 이름" onAdd={handleChannelAdd} />
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="total_amount">결제금액</Label>
-              <Input
-                id="total_amount"
-                name="total_amount"
-                type="number"
-                min={0}
-                defaultValue={booking?.total_amount ?? ""}
-              />
-            </div>
+            <PaymentLinesEditor paymentTypes={paymentTypes} bookingId={booking?.id} />
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="memo">메모</Label>
               <Textarea id="memo" name="memo" defaultValue={booking?.memo ?? ""} />
             </div>
-
-            {!booking && (
-              <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-                <input type="checkbox" name="auto_income" defaultChecked className="size-4" />
-                결제금액을 숙박료 수입으로 자동 등록
-              </label>
-            )}
 
             {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
           </div>
@@ -240,8 +233,13 @@ export function BookingFormDialog({
                 type="button"
                 variant="destructive"
                 disabled={deletePending}
-                onClick={() => {
-                  if (!window.confirm(`"${booking.guest_name}" 예약을 삭제할까요?`)) return;
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: "예약 삭제",
+                    description: `"${booking.guest_name}" 예약을 삭제할까요?`,
+                    destructive: true,
+                  });
+                  if (!ok) return;
                   setOpen(false);
                   startDeleteTransition(async () => {
                     await deleteBooking(booking.id);

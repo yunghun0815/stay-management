@@ -60,6 +60,15 @@ export interface Transaction {
   created_at: string;
 }
 
+export interface PaymentType {
+  id: string;
+  owner_id: string;
+  name: string;
+  type: TransactionType;
+  color: string | null;
+  created_at: string;
+}
+
 export interface EventCategory {
   id: string;
   owner_id: string;

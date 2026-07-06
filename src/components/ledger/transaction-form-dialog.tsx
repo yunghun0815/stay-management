@@ -23,12 +23,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ManagedSelectItem } from "@/components/managed-select-item";
-import { Plus } from "lucide-react";
+import { SelectAddNewRow } from "@/components/select-add-new-row";
 import { createTransaction, updateTransaction } from "@/lib/actions/transactions";
 import { quickCreateCategory, updateCategory, deleteCategory } from "@/lib/actions/categories";
+import { useConfirm, useAlertDialog } from "@/components/providers/dialog-provider";
 import type { Category, Property, Transaction } from "@/types/supabase";
-
-const ADD_NEW_VALUE = "__add_new__";
 
 export function TransactionFormDialog({
   transaction,
@@ -46,6 +45,8 @@ export function TransactionFormDialog({
   const [categoryList, setCategoryList] = useState(categories);
   const [categoryId, setCategoryId] = useState(transaction?.category_id ?? "");
   const [, startCategoryTransition] = useTransition();
+  const confirm = useConfirm();
+  const alertDialog = useAlertDialog();
 
   const action = transaction
     ? updateTransaction.bind(null, transaction.id)
@@ -62,48 +63,32 @@ export function TransactionFormDialog({
 
   const filteredCategories = categoryList.filter((c) => c.type === type);
 
-  function handleCategoryChange(value: string | null) {
-    if (value !== ADD_NEW_VALUE) {
-      setCategoryId(value ?? "");
-      return;
-    }
-    const name = window.prompt("새 카테고리 이름을 입력해주세요");
-    if (!name?.trim()) return;
-    startCategoryTransition(async () => {
-      const result = await quickCreateCategory(name, type);
-      if ("error" in result) {
-        window.alert(result.error);
-        return;
-      }
-      setCategoryList((prev) => [
-        ...prev,
-        { ...result, owner_id: "", type, color: null, created_at: "" },
-      ]);
-      setCategoryId(result.id);
-    });
+  async function handleCategoryAdd(name: string, color: string) {
+    const result = await quickCreateCategory(name, type, color);
+    if ("error" in result) return result;
+    setCategoryList((prev) => [...prev, { ...result, owner_id: "", type, created_at: "" }]);
+    setCategoryId(result.id);
   }
 
-  function handleCategoryEdit(category: Category) {
-    const name = window.prompt("카테고리 이름 수정", category.name);
-    if (!name?.trim() || name === category.name) return;
-    startCategoryTransition(async () => {
-      const result = await updateCategory(category.id, name);
-      if ("error" in result) {
-        window.alert(result.error);
-        return;
-      }
-      setCategoryList((prev) =>
-        prev.map((c) => (c.id === category.id ? { ...c, name: result.name } : c))
-      );
-    });
+  async function handleCategorySave(category: Category, name: string, color: string) {
+    const result = await updateCategory(category.id, name, color);
+    if ("error" in result) return result;
+    setCategoryList((prev) =>
+      prev.map((c) => (c.id === category.id ? { ...c, name: result.name, color: result.color } : c))
+    );
   }
 
-  function handleCategoryDelete(category: Category) {
-    if (!window.confirm(`"${category.name}" 카테고리를 삭제할까요?`)) return;
+  async function handleCategoryDelete(category: Category) {
+    const ok = await confirm({
+      title: "카테고리 삭제",
+      description: `"${category.name}" 카테고리를 삭제할까요?`,
+      destructive: true,
+    });
+    if (!ok) return;
     startCategoryTransition(async () => {
       const result = await deleteCategory(category.id);
       if (result.error) {
-        window.alert(result.error);
+        await alertDialog({ description: result.error });
         return;
       }
       setCategoryList((prev) => prev.filter((c) => c.id !== category.id));
@@ -134,6 +119,7 @@ export function TransactionFormDialog({
                   id="date"
                   name="date"
                   type="date"
+                  max="9999-12-31"
                   defaultValue={transaction?.date}
                   required
                 />
@@ -156,7 +142,14 @@ export function TransactionFormDialog({
               <Select
                 name="type"
                 value={type}
-                onValueChange={(v) => setType(v as "income" | "expense")}
+                onValueChange={(v) => {
+                  const nextType = v as "income" | "expense";
+                  setType(nextType);
+                  setCategoryId((prev) => {
+                    const current = categoryList.find((c) => c.id === prev);
+                    return current && current.type === nextType ? prev : "";
+                  });
+                }}
               >
                 <SelectTrigger id="type" className="w-full">
                   <SelectValue>{(value: string) => (value === "expense" ? "지출" : "수입")}</SelectValue>
@@ -170,7 +163,11 @@ export function TransactionFormDialog({
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="category_id">카테고리</Label>
-              <Select name="category_id" value={categoryId} onValueChange={handleCategoryChange}>
+              <Select
+                name="category_id"
+                value={categoryId}
+                onValueChange={(value) => setCategoryId(value ?? "")}
+              >
                 <SelectTrigger id="category_id" className="w-full">
                   <SelectValue placeholder="카테고리 선택">
                     {(value: string | null) =>
@@ -187,14 +184,12 @@ export function TransactionFormDialog({
                       value={c.id}
                       label={c.name}
                       color={c.color}
-                      onEdit={() => handleCategoryEdit(c)}
+                      onSave={(name, color) => handleCategorySave(c, name, color)}
                       onDelete={() => handleCategoryDelete(c)}
                     />
                   ))}
                   <SelectSeparator />
-                  <SelectItem value={ADD_NEW_VALUE}>
-                    <Plus className="size-3.5" />새 카테고리 추가
-                  </SelectItem>
+                  <SelectAddNewRow placeholder="새 카테고리 이름" onAdd={handleCategoryAdd} />
                 </SelectContent>
               </Select>
             </div>

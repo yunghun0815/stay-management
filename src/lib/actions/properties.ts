@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/require-user";
 
 export type ActionState = { error?: string } | null;
@@ -46,6 +47,9 @@ export async function createProperty(
 
   revalidatePath("/properties");
   revalidatePath("/dashboard");
+  revalidatePath("/bookings");
+  revalidatePath("/ledger");
+  revalidatePath("/calendar");
   return null;
 }
 
@@ -65,6 +69,9 @@ export async function updateProperty(
   revalidatePath("/properties");
   revalidatePath(`/properties/${id}`);
   revalidatePath("/dashboard");
+  revalidatePath("/bookings");
+  revalidatePath("/ledger");
+  revalidatePath("/calendar");
   return null;
 }
 
@@ -76,5 +83,8 @@ export async function deleteProperty(id: string) {
 
   revalidatePath("/properties");
   revalidatePath("/dashboard");
-  return null;
+  revalidatePath("/bookings");
+  revalidatePath("/ledger");
+  revalidatePath("/calendar");
+  redirect("/properties");
 }
